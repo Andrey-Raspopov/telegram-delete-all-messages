@@ -8,6 +8,7 @@ from pyrogram.raw.functions.messages import Search
 from pyrogram.raw.types import InputPeerSelf, InputMessagesFilterEmpty
 from pyrogram.raw.types.messages import ChannelMessages
 from pyrogram.errors import FloodWait, UnknownError
+from pyrogram.enums import ChatType
 
 cachePath = os.path.abspath(__file__)
 cachePath = os.path.dirname(cachePath)
@@ -36,11 +37,6 @@ class Cleaner:
     def __init__(self, chats=None, search_chunk_size=100, delete_chunk_size=100):
         self.chats = chats or []
         if search_chunk_size > 100:
-            # https://github.com/gurland/telegram-delete-all-messages/issues/31
-            #
-            # The issue is that pyrogram.raw.functions.messages.Search uses
-            # pagination with chunks of 100 messages. Might consider switching
-            # to search_messages, which handles pagination transparently.
             raise ValueError('search_chunk_size > 100 not supported')
         self.search_chunk_size = search_chunk_size
         self.delete_chunk_size = delete_chunk_size
@@ -54,18 +50,12 @@ class Cleaner:
 
     @staticmethod
     def get_all_chats():
-        dialogs = app.get_dialogs(pinned_only=True)
-
-        dialog_chunk = app.get_dialogs()
-        while len(dialog_chunk) > 0:
-            dialogs.extend(dialog_chunk)
-            dialog_chunk = app.get_dialogs(offset_date=dialogs[-1].top_message.date-1)
-
+        dialogs = app.get_dialogs()
         return [d.chat for d in dialogs]
 
     def select_groups(self, recursive=0):
         chats = self.get_all_chats()
-        groups = [c for c in chats if c.type in ('group', 'supergroup')]
+        groups = [c for c in chats if c.type in (ChatType.GROUP, ChatType.SUPERGROUP)]
 
         print('Delete all your messages in')
         for i, group in enumerate(groups):
@@ -107,16 +97,12 @@ class Cleaner:
             message_ids = []
             add_offset = 0
 
-            while True:
-                q = self.search_messages(peer, add_offset)
-                message_ids.extend(msg.id for msg in q['messages'])
-                messages_count = len(q['messages'])
-                print(f'Found {messages_count} of your messages in "{chat.title}"')
-                if messages_count < self.search_chunk_size:
-                    break
-                add_offset += self.search_chunk_size
+            q = self.search_messages(chat.id)
+            q = [msg.id for msg in q]
+            messages_count = len(q)
+            print(f'Found {messages_count} of your messages in "{chat.title}"')
 
-            self.delete_messages(chat.id, message_ids)
+            self.delete_messages(chat.id, q)
 
     def delete_messages(self, chat_id, message_ids):
         print(f'Deleting {len(message_ids)} messages with message IDs:')
@@ -127,25 +113,11 @@ class Cleaner:
             except FloodWait as flood_exception:
                 sleep(flood_exception.x)
 
-    def search_messages(self, peer, add_offset):
-        print(f'Searching messages. OFFSET: {add_offset}')
-        return app.send(
-            Search(
-                peer=peer,
-                q='',
-                filter=InputMessagesFilterEmpty(),
-                min_date=0,
-                max_date=0,
-                offset_id=0,
-                add_offset=add_offset,
-                limit=self.search_chunk_size,
-                max_id=0,
-                min_id=0,
-                hash=0,
-                from_id=InputPeerSelf()
-            ),
-            sleep_threshold=60
-        )
+    def search_messages(self, peer):
+        messages = app.search_messages(chat_id=peer,
+                            from_user='me'
+                            )
+        return messages
 
 
 if __name__ == '__main__':

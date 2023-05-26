@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "telegram-delete-all-messages"
+version = "0.1.0"
+description = ""
+authors = ["harmitage <anthonyharmitage@pm.me>"]
+readme = "README.md"
+packages = [{include = "telegram_delete_all_messages"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyrogram = "^2.0.106"
+tgcrypto = "^1.2.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
